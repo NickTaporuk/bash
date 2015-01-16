@@ -1,0 +1,47 @@
+#!/bin/sh
+VERSION="Version 0.12,"
+AUTHOR="2013, sys (email: sys@corp.flirchi.com)"
+#
+# Output version.
+#
+
+print_version() {
+  echo "$VERSION $AUTHOR"
+}
+
+#
+# Output usage information.
+#
+
+print_help() {
+  print_version
+  cat <<-EOF
+$PROGNAME is a source code deploying script.
+
+Usage: ./$PROGNAME [options]
+
+Options:
+  -h, --help
+    Print detailed help screen
+  -v, --version
+    Print version information
+  -e, --env
+    Set destination environment:
+      prod|production - production servers (default)
+      stage           - stage server @sys1 (sets default branch for flirchi and phlight repos to stage)
+      mail            - mail servers
+      img             - img servers
+      cdn             - cdn servers
+  -c, --checkout
+    Checkout to specified rev and lock production copy
+  -u, --unlock
+    Unlock locked deploy
+  -r, --restart
+    Restart MAIL Workers  on mails servers
+  -F, --foreign
+    Deploy foreign version of the site
+  -f, --full
+    Deploy with full recompile autoload and i18n_update tasks
+EOF
+}
+echo print_version
