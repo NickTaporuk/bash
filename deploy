@@ -1,0 +1,129 @@
+#!/bin/sh
+
+#
+# Deploying application to frontend and backend servers
+#
+
+PROGNAME=`basename $0`
+VERSION="Version 0.12,"
+AUTHOR="2013, sys (email: sys@corp.flirchi.com)"
+
+ST_OK=0
+ST_ERR=1
+
+#
+# Default values.
+#
+
+ENV=""
+COMMIT=0
+DEPLOY_USER="wdata"
+DEPLOY_SERVER="10.1.0.19"
+DEPLOY_INFO='/tmp/deploy.lock'
+UNAME=$(git config --get user.name)
+UEMAIL=$(git config --get user.email)
+PARAMS="$@ --user.name \"$UNAME\" --user.email $UEMAIL"
+
+#
+# Output version.
+#
+
+print_version() {
+  echo "$VERSION $AUTHOR"
+}
+
+#
+# Output usage information.
+#
+
+print_help() {
+  print_version
+  cat <<-EOF
+$PROGNAME is a source code deploying script.
+
+Usage: ./$PROGNAME [options]
+
+Options:
+  -h, --help
+    Print detailed help screen
+  -v, --version
+    Print version information
+  -e, --env
+    Set destination environment:
+      prod|production - production servers (default)
+      stage           - stage server @sys1 (sets default branch for flirchi and phlight repos to stage)
+      mail            - mail servers
+      cdn             - cdn servers
+  -c, --checkout
+    Checkout to specified rev and lock production copy
+  -u, --unlock
+    Unlock locked deploy
+  -r, --restart
+    Restart PHP-FPM on all servers
+  -F, --foreign
+    Deploy foreign version of the site
+  -f, --full
+    Deploy with full recompile autoload and i18n_update tasks
+EOF
+}
+
+#
+# Test input parameters.
+#
+
+while test -n "$1"; do
+  case $1 in
+    --help|-h)
+      print_help
+      exit $ST_OK
+      ;;
+    --version|-v)
+      print_version
+      exit $ST_OK
+      ;;
+    --env|-e)
+      ENV=$2
+      case "$ENV" in
+        prod|production|stage|mail|cdn)
+          ;;
+        *)
+          echo "Unknown env value: $ENV"
+          echo "Valid: prod|production|stage|mail|cdn"
+          echo "Type \"$0 -h\" to see the help"
+          exit $ST_ERR
+          ;;
+      esac
+      shift
+      ;;
+    --checkout|-c)
+      COMMIT=$2
+      `git rev-parse --verify $2 >/dev/null 2>&1`
+      if [ $? -ne 0 ]; then
+        echo "Can't find rev with hash: $2"
+        exit $ST_ERR
+      fi
+      shift
+      ;;
+    --unlock|-u)
+      ;;
+    --restart|-r)
+      ;;
+    --foreign|-F)
+      ;;
+    --full|-f)
+      ;;
+    *)
+      echo "Unknown parameter: $1"
+      echo "Type \"$0 -h\" to see the help"
+      exit $ST_ERR
+      ;;
+  esac
+  shift
+done
+
+#
+# Run remote deploy process.
+#
+
+ssh $DEPLOY_USER"@"$DEPLOY_SERVER "/usr/bin/lockf -kst 0 /tmp/deploy.sh /home/deploy/deploy.srv.sh $PARAMS || ([ -e $DEPLOY_INFO ] && printf 'Deploying by:\n  ' && cat $DEPLOY_INFO 2>/dev/null && printf 'Started at: ' && stat $DEPLOY_INFO)"
+exit $ST_OK
