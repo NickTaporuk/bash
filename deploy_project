@@ -1,0 +1,91 @@
+#!/bin/sh
+while
+read -p "Enter username -> " DIR
+grep "$DIR:" /etc/passwd > /dev/null
+[ $? -ne 0 ]; do
+echo 'No username found'
+done
+ 
+mkdir /home/$DIR/www
+cd /home/$DIR/www
+ 
+### MySQL
+echo "mysql-server-5.5 mysql-server/root_password password root" | debconf-set-selections
+echo "mysql-server-5.5 mysql-server/root_password_again password root" | debconf-set-selections
+apt-get install mysql-server -y
+mysqladmin -uroot -proot create znakomster
+ 
+### Code
+apt-get install git -y
+git config core.fileMode false
+git clone git@10.1.0.18:flirchi.git
+git clone git@10.1.0.18:phlight.git
+ 
+apt-get install build-essential nginx memcached redis-server gearman-job-server libgearman-dev curl -y
+apt-get install php5-fpm php-pear php5-cli php5-mysqlnd php5-memcache php5-curl php5-dev php5-json -y
+ 
+### Hosts
+echo "127.0.0.1 znakomster.dev s.znakomster.dev i1.znakomster.dev i1.flirchi.dev" >> /etc/hosts
+ 
+### Nginx
+cp ~/www/flirchi/config/nginx/dev.sample.conf ~/www/flirchi/config/nginx/dev.$DIR.conf
+bash -c "sed -i 's/__DIR__/$DIR/g' ~/www/flirchi/config/nginx/dev.$DIR.conf"
+ln -s ~/www/flirchi/config/nginx/dev.$DIR.conf /etc/nginx/sites-enabled/flirchi.conf
+ 
+### PHP
+rm /etc/php5/fpm/php.ini
+rm /etc/php5/cli/php.ini
+ln -s /home/$DIR/www/flirchi/data/setup/dev.php.ini /etc/php5/fpm/php.ini
+ln -s /home/$DIR/www/flirchi/data/setup/dev.php.ini /etc/php5/cli/php.ini
+mkdir -p /usr/local/etc
+ln -s /home/$DIR/www/flirchi/data/setup/browscap.ini /usr/local/etc/browscap.ini
+ 
+echo "
+[global]
+pid = /var/run/php5-fpm.pid
+error_log = /var/log/php5-fpm.log
+[www]
+user = $DIR
+group = $DIR
+listen = 127.0.0.1:9000
+listen.backlog = 1024
+pm = dynamic
+pm.max_children = 256
+pm.start_servers = 32
+pm.min_spare_servers = 16
+pm.max_spare_servers = 64
+pm.max_requests = 1024
+pm.status_path = /fpm-status
+request_slowlog_timeout = 3s
+slowlog = /var/log/php-slow.log
+catch_workers_output = yes " > /etc/php5/fpm/php-fpm.conf
+ 
+# Building Gearman extension
+mkdir /tmp/build
+cd /tmp/build
+wget http://pecl.php.net/get/gearman
+tar xzvf gearman
+cd `find -maxdepth 1 -type d -name 'gearman*'| awk 'NR==1'`
+phpize
+./configure
+make && make install
+# Building xdebug
+sudo pecl install xdebug
+ 
+### Project
+cp ~/www/flirchi/config/app/dev.sample.php ~/www/flirchi/config/app/dev.$DIR.php
+ 
+echo "<?php return 'dev.$DIR'; ?>" > /home/$DIR/www/flirchi/config/dev
+ 
+cd /home/$DIR/www/flirchi
+ln -s /usr/bin/php /usr/local/bin/php
+chown $DIR:$DIR -R /home/$DIR/www/
+chown $DIR:$DIR /var/log/php5-fpm.log
+chown $DIR:$DIR /var/log/php-slow.log
+ 
+./run init_dev_db
+./run compile_static_new
+./run compile_load
+ 
+service nginx restart
+service php5-fpm restart
