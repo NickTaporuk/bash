@@ -1,0 +1,104 @@
+#!/bin/bash
+ 
+TITLE=
+ABR=128
+VOLUME=5
+DVDDEV="./"
+OUT=out
+VBR=600000
+ 
+while true ; do
+        case "$1" in
+        --vers | --versi | --versio | --version)
+        echo $"`basename $0` 0.3"
+        printf $"Copyright '(C)' %s Free Software Foundation, Inc.\nThis is free software; \
+see the source for copying conditions.\nThere is NO warranty; not even for MERCHANTABILITY \
+or FITNESS FOR A PARTICULAR PURPOSE.\n" "2009"
+ 
+printf $"Written by %s aka %s.\n" "Zakhary Akulov" "hozzzar"
+printf $"Feel free to email me about possible bug at %s.\n" "hozzzar@gmail.com"
+        exit 0
+        shift
+;;
+        -h | --h | -help | --help)
+        echo $"Использование: `basename $0` [-t title] [-ab bitrate] [-vb bitrate] [-v volume] [-d dvd-device]
+        -ab, --abitrate         требуемый аудиобитрейт, по умолчанию -- 128 kbps
+        -vb, --vbitrate         требуемый видеобитрейт, по умолчанию -- для 700Mb диска
+        -d, --dvd               путь к каталогу DVD
+        -t, --title             номер тайтла
+        -v, --volume            громкость, по умолчанию 5
+        -s, --start             начало фрагмента, MM:SS
+        -e, --end               продолжительность фрагмента, MM:SS
+        --scale                 масштабирование в пикселах, ширина:высота
+        -o, --output            файл вывода, без пробелов и расширения
+        -h, --help              показать эту справку и выйти
+        --version               показать версию и выйти"
+        exit 0
+        shift
+;;
+        -ab | --ab | -abitrate | --abitrate)
+        ABR="$2"
+        shift 2
+;;
+        -vb | --vb | -vbitrate | --vbitrate)
+        VBR="$2"
+        shift 2
+;;
+        -d | --d | -dvd | --dvd)
+        DVDDEV="$2"
+        shift 2
+;;
+        -t | --t | --title | -tile)
+        TITLE="$2"
+        shift 2
+;;
+        -v | --v | -volume | --volume)
+        VOLUME="$2"
+        shift 2
+;;
+        -s | --s | -start | --start)
+        SPOS="-ss $2"
+        shift 2
+;;
+        -e | --e | -end | --end)
+        EPOS="-endpos $2"
+        shift 2
+;;
+        --scale)
+        SCALE=",scale=$2"
+        shift 2
+;;
+        -o | --o | -output | --output)
+        OUT="$2"
+        shift 2
+;;
+        --)           # Останов.
+        shift; break
+;;
+        -*)
+        echo >&2 $"`basename $0`: не могу распознать опцию '$1'"
+        echo >&2 $"Наберите '`basename $0` --help' для получения справки."
+exit 1
+;;
+        *)
+        break
+;;
+ 
+esac
+done
+ 
+mplayer dvd://${TITLE} -dvd-device ${DVDDEV} -vf cropdetect \
+-ss 10:00 -endpos 00:05 > cropfile
+ 
+CROP=`awk -F' ' '{print($24)}' cropfile |grep -m 1 crop | sed 's/..$//g'`
+ 
+mencoder dvd://${TITLE} -dvd-device ${DVDDEV} ${SPOS} ${EPOS} -ovc frameno -oac mp3lame \
+-lameopts abr:br=${ABR}:mode=1:vol=${VOLUME} -o frameno.avi
+ 
+mencoder dvd://${TITLE} -dvd-device ${DVDDEV} ${SPOS} ${EPOS} -ovc xvid \
+-xvidencopts pass=1:vhq=1:vhq=4:gmc \
+-vf ${CROP}${SCALE},hqdn3d=2:1:2 -oac copy -o /dev/null
+ 
+mencoder dvd://${TITLE} -dvd-device ${DVDDEV} ${SPOS} ${EPOS} -ovc xvid \
+-xvidencopts pass=2:vhq=1:vhq=4:gmc:bitrate=-${VBR} \
+-vf ${CROP}${SCALE},hqdn3d=2:1:2 -oac copy -o ${OUT}.avi
